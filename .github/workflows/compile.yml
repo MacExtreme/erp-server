@@ -1,0 +1,15 @@
+name: Compile ERP Server
+on: [push]
+jobs:
+  build:
+    runs-on: windows-latest
+    steps:
+    - uses: actions/checkout@v3
+    - name: Compile
+      run: |
+        g++ -std=c++17 -Iinclude -I"$env:PROGRAMFILES\PostgreSQL\18\include" src/main.cpp -o erp_server.exe -L"$env:PROGRAMFILES\PostgreSQL\18\lib" -lpq -lws2_32
+    - name: Upload Artifact
+      uses: actions/upload-artifact@v3
+      with:
+        name: erp-server
+        path: erp_server.exe
