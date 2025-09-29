@@ -1,0 +1,239 @@
+// ====================================================================
+// JSON.HPP - VERSIÓN MÍNIMA
+// Alternativa básica para nlohmann/json
+// ====================================================================
+
+#ifndef NLOHMANN_JSON_HPP
+#define NLOHMANN_JSON_HPP
+
+#include <string>
+#include <map>
+#include <vector>
+#include <sstream>
+#include <iostream>
+
+namespace nlohmann {
+    
+    class json {
+    private:
+        enum Type { String, Number, Boolean, Object, Array, Null } type_;
+        std::string string_value_;
+        double number_value_ = 0;
+        bool bool_value_ = false;
+        std::map<std::string, json> object_value_;
+        std::vector<json> array_value_;
+        
+    public:
+        // Constructors
+        json() : type_(Null) {}
+        json(const std::string& value) : type_(String), string_value_(value) {}
+        json(const char* value) : type_(String), string_value_(value) {}
+        json(int value) : type_(Number), number_value_(value) {}
+        json(double value) : type_(Number), number_value_(value) {}
+        json(bool value) : type_(Boolean), bool_value_(value) {}
+        json(const std::map<std::string, json>& value) : type_(Object), object_value_(value) {}
+        json(const std::vector<json>& value) : type_(Array), array_value_(value) {}
+        
+        // Static factory methods
+        static json object() {
+            json j;
+            j.type_ = Object;
+            return j;
+        }
+        
+        static json array() {
+            json j;
+            j.type_ = Array;
+            return j;
+        }
+        
+        // Access operators
+        json& operator[](const std::string& key) {
+            if (type_ != Object) {
+                type_ = Object;
+                object_value_.clear();
+            }
+            return object_value_[key];
+        }
+        
+        const json& operator[](const std::string& key) const {
+            static json null_json;
+            if (type_ != Object) return null_json;
+            auto it = object_value_.find(key);
+            return it != object_value_.end() ? it->second : null_json;
+        }
+        
+        json& operator[](size_t index) {
+            if (type_ != Array) {
+                type_ = Array;
+                array_value_.clear();
+            }
+            if (index >= array_value_.size()) {
+                array_value_.resize(index + 1);
+            }
+            return array_value_[index];
+        }
+        
+        // Type checking
+        bool is_string() const { return type_ == String; }
+        bool is_number() const { return type_ == Number; }
+        bool is_boolean() const { return type_ == Boolean; }
+        bool is_object() const { return type_ == Object; }
+        bool is_array() const { return type_ == Array; }
+        bool is_null() const { return type_ == Null; }
+        
+        // Value access
+        std::string get<std::string>() const { return string_value_; }
+        int get<int>() const { return static_cast<int>(number_value_); }
+        double get<double>() const { return number_value_; }
+        bool get<bool>() const { return bool_value_; }
+        
+        // Implicit conversions
+        operator std::string() const { return string_value_; }
+        operator int() const { return static_cast<int>(number_value_); }
+        operator double() const { return number_value_; }
+        operator bool() const { return bool_value_; }
+        
+        // Contains method
+        bool contains(const std::string& key) const {
+            return type_ == Object && object_value_.find(key) != object_value_.end();
+        }
+        
+        // Push back for arrays
+        void push_back(const json& value) {
+            if (type_ != Array) {
+                type_ = Array;
+                array_value_.clear();
+            }
+            array_value_.push_back(value);
+        }
+        
+        // Serialization
+        std::string dump(int indent = -1) const {
+            return to_string();
+        }
+        
+        std::string to_string() const {
+            std::ostringstream oss;
+            switch (type_) {
+                case String:
+                    oss << "\"" << escape_string(string_value_) << "\"";
+                    break;
+                case Number:
+                    if (number_value_ == static_cast<int>(number_value_)) {
+                        oss << static_cast<int>(number_value_);
+                    } else {
+                        oss << number_value_;
+                    }
+                    break;
+                case Boolean:
+                    oss << (bool_value_ ? "true" : "false");
+                    break;
+                case Object:
+                    oss << "{";
+                    {
+                        bool first = true;
+                        for (const auto& pair : object_value_) {
+                            if (!first) oss << ",";
+                            oss << "\"" << escape_string(pair.first) << "\":" << pair.second.to_string();
+                            first = false;
+                        }
+                    }
+                    oss << "}";
+                    break;
+                case Array:
+                    oss << "[";
+                    {
+                        bool first = true;
+                        for (const auto& item : array_value_) {
+                            if (!first) oss << ",";
+                            oss << item.to_string();
+                            first = false;
+                        }
+                    }
+                    oss << "]";
+                    break;
+                case Null:
+                    oss << "null";
+                    break;
+            }
+            return oss.str();
+        }
+        
+        // Parse from string
+        static json parse(const std::string& str) {
+            // Simplified parser - only handles basic cases
+            json result;
+            std::string trimmed = trim(str);
+            
+            if (trimmed.empty() || trimmed == "null") {
+                return result; // null
+            }
+            
+            if (trimmed == "true") {
+                return json(true);
+            }
+            
+            if (trimmed == "false") {
+                return json(false);
+            }
+            
+            if (trimmed[0] == '"' && trimmed[trimmed.length()-1] == '"') {
+                return json(trimmed.substr(1, trimmed.length()-2));
+            }
+            
+            // Try to parse as number
+            try {
+                if (trimmed.find('.') != std::string::npos) {
+                    return json(std::stod(trimmed));
+                } else {
+                    return json(std::stoi(trimmed));
+                }
+            } catch (...) {
+                // Not a number
+            }
+            
+            if (trimmed[0] == '{') {
+                // Simple object parser
+                result.type_ = Object;
+                // For simplicity, we'll just return empty object
+                // A full parser would be much more complex
+                return result;
+            }
+            
+            if (trimmed[0] == '[') {
+                // Simple array parser
+                result.type_ = Array;
+                return result;
+            }
+            
+            // Default to string
+            return json(trimmed);
+        }
+        
+    private:
+        std::string escape_string(const std::string& str) const {
+            std::string escaped;
+            for (char c : str) {
+                switch (c) {
+                    case '"': escaped += "\\\""; break;
+                    case '\\': escaped += "\\\\"; break;
+                    case '\n': escaped += "\\n"; break;
+                    case '\r': escaped += "\\r"; break;
+                    case '\t': escaped += "\\t"; break;
+                    default: escaped += c; break;
+                }
+            }
+            return escaped;
+        }
+        
+        static std::string trim(const std::string& str) {
+            size_t start = str.find_first_not_of(" \t\n\r");
+            if (start == std::string::npos) return "";
+            size_t end = str.find_last_not_of(" \t\n\r");
+            return str.substr(start, end - start + 1);
+        }
+    };
+}
+
+#endif // NLOHMANN_JSON_HPP
