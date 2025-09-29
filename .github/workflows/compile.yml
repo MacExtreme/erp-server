@@ -4,12 +4,17 @@ jobs:
   build:
     runs-on: windows-latest
     steps:
-    - uses: actions/checkout@v3
-    - name: Compile
+    - uses: actions/checkout@v4
+    - name: Setup PostgreSQL
       run: |
-        g++ -std=c++17 -Iinclude -I"$env:PROGRAMFILES\PostgreSQL\18\include" src/main.cpp -o erp_server.exe -L"$env:PROGRAMFILES\PostgreSQL\18\lib" -lpq -lws2_32
-    - name: Upload Artifact
-      uses: actions/upload-artifact@v3
+        # Instalar PostgreSQL (si es necesario)
+        echo "PostgreSQL ya está en Windows runner"
+    - name: Compile ERP Server
+      run: |
+        g++ -std=c++17 -Iinclude -I"$env:PROGRAMFILES\PostgreSQL\18\include" src/main.cpp src/all_includes.cpp -o erp_server.exe -L"$env:PROGRAMFILES\PostgreSQL\18\lib" -lpq -lws2_32
+    - name: Upload Executable
+      uses: actions/upload-artifact@v4
       with:
-        name: erp-server
+        name: erp-server-executable
         path: erp_server.exe
+        retention-days: 30
